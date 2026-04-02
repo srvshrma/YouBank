@@ -1,8 +1,11 @@
 package com.bank.service;
 
 import com.bank.dto.AccountResponse;
+import com.bank.dto.AccountListItemResponse;
 import com.bank.dto.BankSummaryResponse;
 import com.bank.dto.CreateAccountRequest;
+import com.bank.dto.PageResponse;
+import com.bank.dto.TransactionResponse;
 import com.bank.dto.TransferRequest;
 import com.bank.exception.AccountNotFoundException;
 import com.bank.exception.InsufficientFundsException;
@@ -73,8 +76,25 @@ public class BankingService implements AccountFormatter {
                 .collect(Collectors.toList());
     }
 
+    public PageResponse<AccountListItemResponse> getAccounts(int page, int size) {
+        List<AccountListItemResponse> content = accountRepository.findAll().stream()
+                .sorted(Comparator.comparing(Account::getOwnerName))
+                .map(AccountListItemResponse::from)
+                .collect(Collectors.toList());
+        return paginate(content, page, size);
+    }
+
     public AccountResponse getAccount(String accountId) {
         return AccountResponse.from(getAccountEntity(accountId));
+    }
+
+    public PageResponse<TransactionResponse> getTransactions(String accountId, int page, int size) {
+        Account account = getAccountEntity(accountId);
+        List<TransactionResponse> transactions = account.getTransactions().stream()
+                .sorted(Comparator.comparing(com.bank.model.Transaction::getCreatedAt).reversed())
+                .map(TransactionResponse::from)
+                .collect(Collectors.toList());
+        return paginate(transactions, page, size);
     }
 
     public synchronized AccountResponse deposit(String accountId, BigDecimal amount, String description) {
@@ -151,5 +171,30 @@ public class BankingService implements AccountFormatter {
     private Account getAccountEntity(String accountId) {
         return accountRepository.findById(accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
+    }
+
+    private <T> PageResponse<T> paginate(List<T> items, int page, int size) {
+        if (size <= 0) {
+            throw new IllegalArgumentException("Page size must be greater than zero");
+        }
+        if (page < 0) {
+            throw new IllegalArgumentException("Page index must not be negative");
+        }
+
+        int totalElements = items.size();
+        int totalPages = totalElements == 0 ? 1 : (int) Math.ceil((double) totalElements / (double) size);
+        int fromIndex = Math.min(page * size, totalElements);
+        int toIndex = Math.min(fromIndex + size, totalElements);
+        List<T> content = items.subList(fromIndex, toIndex);
+
+        return new PageResponse<>(
+                content,
+                page,
+                size,
+                totalElements,
+                totalPages,
+                page == 0,
+                page >= totalPages - 1
+        );
     }
 }

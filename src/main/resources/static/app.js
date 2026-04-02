@@ -2,6 +2,7 @@
     var useEffect = React.useEffect;
     var useState = React.useState;
     var e = React.createElement;
+    var SESSION_KEY = "you-bank-session";
 
     function currency(value) {
         var number = Number(value || 0);
@@ -16,12 +17,42 @@
         return text ? text.charAt(0).toUpperCase() + text.slice(1).toLowerCase() : "";
     }
 
-    function api(path, options) {
-        return fetch(path, Object.assign({
-            headers: {
-                "Content-Type": "application/json"
-            }
-        }, options || {})).then(function (response) {
+    function readSession() {
+        try {
+            var raw = window.localStorage.getItem(SESSION_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function writeSession(session) {
+        window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    }
+
+    function clearSession() {
+        window.localStorage.removeItem(SESSION_KEY);
+    }
+
+    function getRoute() {
+        var hash = window.location.hash.replace(/^#/, "");
+        return hash || "/login";
+    }
+
+    function setRoute(route) {
+        window.location.hash = route;
+    }
+
+    function api(path, options, session) {
+        var headers = Object.assign({
+            "Content-Type": "application/json"
+        }, options && options.headers ? options.headers : {});
+
+        if (session && session.token) {
+            headers.Authorization = "Bearer " + session.token;
+        }
+
+        return fetch(path, Object.assign({}, options || {}, { headers: headers })).then(function (response) {
             return response.text().then(function (text) {
                 var payload = text ? JSON.parse(text) : {};
                 if (!response.ok) {
@@ -32,348 +63,588 @@
         });
     }
 
-    function Panel(props) {
-        return e("section", { className: "panel fade-in " + (props.className || "") }, props.children);
-    }
-
     function Field(props) {
-        return e("div", { className: "field" }, [
-            e("label", { key: "label", htmlFor: props.id }, props.label),
+        return e("label", { className: "field" }, [
+            e("span", { key: "label" }, props.label),
             props.type === "select"
                 ? e("select", {
                     key: "input",
-                    id: props.id,
                     value: props.value,
                     onChange: function (event) { props.onChange(event.target.value); }
                 }, props.options.map(function (option) {
                     return e("option", { key: option.value, value: option.value }, option.label);
                 }))
-                : props.type === "textarea"
-                    ? e("textarea", {
-                        key: "input",
-                        id: props.id,
-                        rows: props.rows || 3,
-                        value: props.value,
-                        onChange: function (event) { props.onChange(event.target.value); },
-                        placeholder: props.placeholder || ""
-                    })
-                    : e("input", {
-                        key: "input",
-                        id: props.id,
-                        type: props.type || "text",
-                        value: props.value,
-                        onChange: function (event) { props.onChange(event.target.value); },
-                        placeholder: props.placeholder || "",
-                        min: props.min
-                    })
+                : e("input", {
+                    key: "input",
+                    type: props.type || "text",
+                    value: props.value,
+                    min: props.min,
+                    placeholder: props.placeholder || "",
+                    onChange: function (event) { props.onChange(event.target.value); }
+                })
         ]);
     }
 
-    function MessageBanner(props) {
+    function Banner(props) {
         if (!props.message) {
             return null;
         }
-        return e("div", {
-            className: "banner " + (props.kind === "error" ? "banner-error" : "banner-success")
-        }, props.message);
+        return e("div", { className: "banner " + (props.kind === "error" ? "banner-error" : "banner-success") }, props.message);
     }
 
-    function Hero(props) {
-        return e("div", { className: "hero" }, [
-            e("div", { key: "main", className: "hero-card fade-in" }, [
-                e("div", { key: "kicker", className: "hero-kicker mono" }, "Spring Boot + React Test Console"),
-                e("h1", { key: "title" }, "You Bank Control Room"),
-                e("p", { key: "copy" }, "Run real account operations against your Spring Boot API, inspect transaction state, and validate the banking flows from one screen."),
-                e("div", { key: "meta", className: "hero-meta" }, [
-                    e("div", { key: "accounts", className: "stat-chip" }, [
-                        e("span", { key: "label" }, "Accounts"),
-                        e("strong", { key: "value" }, props.totalAccounts)
+    function Pagination(props) {
+        return e("div", { className: "pagination" }, [
+            e("button", {
+                key: "prev",
+                className: "button button-soft",
+                disabled: props.page <= 0 || props.loading,
+                onClick: function () { props.onChange(props.page - 1); }
+            }, "Previous"),
+            e("div", { key: "meta", className: "pagination-meta" },
+                "Page " + (props.page + 1) + " of " + Math.max(props.totalPages || 1, 1)
+            ),
+            e("button", {
+                key: "next",
+                className: "button button-soft",
+                disabled: props.last || props.loading,
+                onClick: function () { props.onChange(props.page + 1); }
+            }, "Next")
+        ]);
+    }
+
+    function AuthLayout(props) {
+        return e("div", { className: "auth-shell" }, [
+            e("section", { key: "brand", className: "auth-brand" }, [
+                e("div", { className: "auth-chip mono" }, "You Bank Digital Banking"),
+                e("h1", null, "Secure everyday banking for accounts, transfers, and balance control."),
+                e("p", null, "Sign in to review balances, monitor account activity, move funds, and manage customer accounts through a cleaner digital banking experience."),
+                e("div", { className: "auth-highlights" }, [
+                    e("div", { key: "one", className: "auth-highlight" }, [
+                        e("strong", null, "Live Summary"),
+                        e("span", null, "Portfolio health and premium account metrics.")
                     ]),
-                    e("div", { key: "balance", className: "stat-chip" }, [
-                        e("span", { key: "label" }, "Total Balance"),
-                        e("strong", { key: "value" }, currency(props.totalBalance))
+                    e("div", { key: "two", className: "auth-highlight" }, [
+                        e("strong", null, "Paginated Accounts"),
+                        e("span", null, "Review account lists and transactions without loading everything at once.")
                     ]),
-                    e("div", { key: "average", className: "stat-chip" }, [
-                        e("span", { key: "label" }, "Average"),
-                        e("strong", { key: "value" }, currency(props.averageBalance))
+                    e("div", { key: "three", className: "auth-highlight" }, [
+                        e("strong", null, "Payments Desk"),
+                        e("span", null, "Deposit, withdraw, and transfer from a dedicated workflow page.")
                     ])
                 ])
             ]),
-            e("div", { key: "side", className: "hero-card hero-side fade-in stagger-1" }, [
-                e("div", { key: "api" }, [
-                    e("span", { className: "eyebrow mono" }, "API Surface"),
-                    e("div", { className: "value mono" }, "/api/accounts"),
-                    e("div", { className: "panel-copy" }, "Same-origin UI served directly by Spring Boot.")
-                ]),
-                e("div", { key: "summary" }, [
-                    e("span", { className: "eyebrow mono" }, "Overview"),
-                    e("div", { className: "value mono" }, "/api/accounts/summary"),
-                    e("div", { className: "panel-copy" }, "Live metrics for balances, averages, and premium accounts.")
-                ])
-            ])
+            e("section", { key: "card", className: "auth-card" }, props.children)
         ]);
     }
 
-    function CreateAccountPanel(props) {
-        return e(Panel, { className: "stagger-1" }, [
-            e("div", { key: "header", className: "panel-header" }, [
-                e("div", { key: "titles" }, [
-                    e("h2", { key: "title" }, "Open Account"),
-                    e("p", { key: "copy", className: "panel-copy" }, "Create seeded test accounts or add new ones with a single request.")
-                ])
+    function LoginPage(props) {
+        return e(AuthLayout, null, [
+            e("div", { key: "header", className: "auth-card-head" }, [
+                e("h2", null, "Log in"),
+                e("p", null, "Access your digital banking profile.")
             ]),
-            e("div", { key: "fields", className: "grid-2" }, [
+            e(Banner, { key: "banner", kind: props.bannerKind, message: props.banner }),
+            e("div", { key: "fields", className: "form-grid" }, [
                 e(Field, {
-                    key: "owner",
-                    id: "ownerName",
-                    label: "Owner name",
-                    value: props.form.ownerName,
-                    onChange: function (value) { props.setForm("ownerName", value); },
-                    placeholder: "Katherine Johnson"
+                    key: "email",
+                    label: "Email",
+                    type: "email",
+                    value: props.form.email,
+                    onChange: function (value) { props.setForm("email", value); },
+                    placeholder: "you@example.com"
                 }),
                 e(Field, {
-                    key: "type",
-                    id: "accountType",
-                    label: "Account type",
-                    type: "select",
-                    value: props.form.accountType,
-                    onChange: function (value) { props.setForm("accountType", value); },
-                    options: [
-                        { value: "CHECKING", label: "Checking" },
-                        { value: "SAVINGS", label: "Savings" },
-                        { value: "BUSINESS", label: "Business" }
-                    ]
-                }),
-                e(Field, {
-                    key: "opening",
-                    id: "openingBalance",
-                    label: "Opening balance",
-                    type: "number",
-                    min: "0",
-                    value: props.form.openingBalance,
-                    onChange: function (value) { props.setForm("openingBalance", value); },
-                    placeholder: "1000"
+                    key: "password",
+                    label: "Password",
+                    type: "password",
+                    value: props.form.password,
+                    onChange: function (value) { props.setForm("password", value); },
+                    placeholder: "password123"
                 })
             ]),
-            e("div", { key: "actions", className: "button-row" }, [
+            e("div", { key: "actions", className: "auth-actions" }, [
                 e("button", {
                     key: "submit",
-                    className: "button button-accent",
+                    className: "button button-primary button-block",
                     onClick: props.onSubmit,
                     disabled: props.loading
-                }, props.loading ? "Opening..." : "Create account"),
+                }, props.loading ? "Signing in..." : "Access account"),
                 e("button", {
-                    key: "reset",
-                    className: "button button-ghost",
-                    onClick: props.onReset,
+                    key: "switch",
+                    className: "button button-link button-block",
+                    onClick: function () { setRoute("/signup"); }
+                }, "Need an account? Sign up")
+            ]),
+            e("div", { key: "hint", className: "demo-hint mono" }, "Quick access: demo@youbank.com / password123")
+        ]);
+    }
+
+    function SignupPage(props) {
+        return e(AuthLayout, null, [
+            e("div", { key: "header", className: "auth-card-head" }, [
+                e("h2", null, "Create profile"),
+                e("p", null, "Register a new digital banking profile.")
+            ]),
+            e(Banner, { key: "banner", kind: props.bannerKind, message: props.banner }),
+            e("div", { key: "fields", className: "form-grid" }, [
+                e(Field, {
+                    key: "name",
+                    label: "Full name",
+                    value: props.form.fullName,
+                    onChange: function (value) { props.setForm("fullName", value); },
+                    placeholder: "Saurav Sharma"
+                }),
+                e(Field, {
+                    key: "email",
+                    label: "Email",
+                    type: "email",
+                    value: props.form.email,
+                    onChange: function (value) { props.setForm("email", value); },
+                    placeholder: "saurav@youbank.com"
+                }),
+                e(Field, {
+                    key: "password",
+                    label: "Password",
+                    type: "password",
+                    value: props.form.password,
+                    onChange: function (value) { props.setForm("password", value); },
+                    placeholder: "At least 6 characters"
+                })
+            ]),
+            e("div", { key: "actions", className: "auth-actions" }, [
+                e("button", {
+                    key: "submit",
+                    className: "button button-primary button-block",
+                    onClick: props.onSubmit,
                     disabled: props.loading
-                }, "Reset form")
+                }, props.loading ? "Creating..." : "Create account"),
+                e("button", {
+                    key: "switch",
+                    className: "button button-link button-block",
+                    onClick: function () { setRoute("/login"); }
+                }, "Already have an account? Log in")
             ])
         ]);
     }
 
-    function ActionPanel(props) {
-        return e(Panel, { className: "stagger-2" }, [
-            e("div", { key: "header", className: "panel-header" }, [
-                e("div", { key: "titles" }, [
-                    e("h2", { key: "title" }, "Move Money"),
-                    e("p", { key: "copy", className: "panel-copy" }, "Deposit, withdraw, or transfer against the in-memory repository.")
+    function Shell(props) {
+        var navItems = [
+            { route: "/dashboard", label: "Dashboard" },
+            { route: "/accounts", label: "Accounts" },
+            { route: "/payments", label: "Payments" }
+        ];
+
+        return e("div", { className: "bank-shell" }, [
+            e("aside", { key: "sidebar", className: "sidebar" }, [
+                e("div", { key: "brand", className: "brand-block" }, [
+                    e("div", { className: "brand-mark" }, "YB"),
+                    e("div", null, [
+                        e("strong", null, "You Bank"),
+                        e("span", { className: "muted" }, "Digital banking")
+                    ])
+                ]),
+                e("nav", { key: "nav", className: "sidebar-nav" },
+                    navItems.map(function (item) {
+                        return e("button", {
+                            key: item.route,
+                            className: "nav-link" + (props.route === item.route ? " nav-link-active" : ""),
+                            onClick: function () { setRoute(item.route); }
+                        }, item.label);
+                    })
+                ),
+                e("div", { key: "profile", className: "sidebar-profile" }, [
+                    e("span", { className: "eyebrow" }, "Signed in"),
+                    e("strong", null, props.session.fullName),
+                    e("div", { className: "muted mono" }, props.session.email),
+                    e("button", {
+                        className: "button button-soft button-block",
+                        onClick: props.onLogout
+                    }, "Log out")
                 ])
             ]),
-            e("div", { key: "content", className: "grid-2" }, [
-                e("div", { key: "dw" }, [
+            e("div", { key: "content", className: "content-shell" }, [
+                e("header", { key: "top", className: "topbar" }, [
+                    e("div", null, [
+                        e("span", { className: "eyebrow mono" }, "Retail Banking"),
+                        e("h1", null, props.heading)
+                    ]),
+                    e("div", { className: "topbar-card" }, [
+                        e("span", null, "Signed in as"),
+                        e("strong", null, props.session.fullName)
+                    ])
+                ]),
+                e(Banner, { key: "banner", kind: props.bannerKind, message: props.banner }),
+                e("main", { key: "main", className: "page-body" }, props.children)
+            ])
+        ]);
+    }
+
+    function DashboardPage(props) {
+        var summary = props.summary || { totalAccounts: 0, totalBalance: 0, averageBalance: 0, accountsByType: {}, premiumOwners: [] };
+        return e("div", { className: "page-grid" }, [
+            e("section", { key: "hero", className: "hero-panel" }, [
+                e("div", { className: "hero-copy" }, [
+                    e("span", { className: "eyebrow mono" }, "Overview"),
+                    e("h2", null, "Stay close to balances, account growth, and day-to-day money movement."),
+                    e("p", null, "Review core banking metrics, open account details, and move directly into account servicing or payments.")
+                ]),
+                e("div", { className: "stat-grid" }, [
+                    e("article", { key: "balance", className: "stat-card" }, [
+                        e("span", null, "Total balance"),
+                        e("strong", null, currency(summary.totalBalance))
+                    ]),
+                    e("article", { key: "accounts", className: "stat-card" }, [
+                        e("span", null, "Total accounts"),
+                        e("strong", null, summary.totalAccounts || 0)
+                    ]),
+                    e("article", { key: "average", className: "stat-card" }, [
+                        e("span", null, "Average balance"),
+                        e("strong", null, currency(summary.averageBalance))
+                    ])
+                ])
+            ]),
+            e("section", { key: "types", className: "card" }, [
+                e("div", { className: "section-head" }, [
+                    e("h3", null, "Account mix"),
+                    e("button", { className: "button button-soft", onClick: props.onRefresh, disabled: props.loading }, "Refresh")
+                ]),
+                e("div", { className: "metric-list" },
+                    Object.entries(summary.accountsByType || {}).map(function (entry) {
+                        return e("div", { key: entry[0], className: "metric-row" }, [
+                            e("span", null, title(entry[0])),
+                            e("strong", null, entry[1])
+                        ]);
+                    })
+                )
+            ]),
+            e("section", { key: "accounts", className: "card card-wide" }, [
+                e("div", { className: "section-head" }, [
+                    e("h3", null, "Recent accounts"),
+                    e("button", { className: "button button-soft", onClick: function () { setRoute("/accounts"); } }, "View accounts")
+                ]),
+                e("div", { className: "account-preview-grid" },
+                    props.accounts.map(function (account) {
+                        return e("article", { key: account.id, className: "account-preview" }, [
+                            e("div", { className: "account-preview-top" }, [
+                                e("div", null, [
+                                    e("strong", null, account.ownerName),
+                                    e("div", { className: "muted" }, title(account.accountType))
+                                ]),
+                                e("strong", { className: "mono" }, currency(account.balance))
+                            ]),
+                            e("div", { className: "muted mono" }, account.id),
+                            e("div", { className: "badge-row" },
+                                (account.tags || []).map(function (tag, index) {
+                                    return e("span", { key: tag + index, className: "badge" }, tag);
+                                })
+                            )
+                        ]);
+                    })
+                )
+            ]),
+            e("section", { key: "premium", className: "card" }, [
+                e("div", { className: "section-head" }, [
+                    e("h3", null, "Priority relationships"),
+                    e("button", { className: "button button-soft", onClick: function () { setRoute("/payments"); } }, "Open payments")
+                ]),
+                props.summary.premiumOwners && props.summary.premiumOwners.length
+                    ? e("div", { className: "premium-list" },
+                        props.summary.premiumOwners.map(function (owner, index) {
+                            return e("div", { key: owner + index, className: "premium-item" }, owner);
+                        })
+                    )
+                    : e("p", { className: "muted" }, "No premium accounts currently cross the configured threshold.")
+            ])
+        ]);
+    }
+
+    function AccountsPage(props) {
+        var selected = props.selectedAccount;
+        return e("div", { className: "page-grid page-grid-wide" }, [
+            e("section", { key: "list", className: "card card-wide" }, [
+                e("div", { className: "section-head" }, [
+                    e("div", null, [
+                        e("h3", null, "Accounts"),
+                        e("p", { className: "muted" }, "Browse customer accounts and review balances with paginated access.")
+                    ]),
+                    e("button", { className: "button button-soft", onClick: props.onRefresh, disabled: props.loading }, "Reload")
+                ]),
+                e("div", { className: "account-list-grid" },
+                    props.accounts.map(function (account) {
+                        return e("article", {
+                            key: account.id,
+                            className: "account-tile" + (selected && selected.id === account.id ? " account-tile-active" : ""),
+                            onClick: function () { props.onSelect(account.id); }
+                        }, [
+                            e("div", { className: "account-preview-top" }, [
+                                e("div", null, [
+                                    e("strong", null, account.ownerName),
+                                    e("div", { className: "muted" }, title(account.accountType))
+                                ]),
+                                e("strong", { className: "mono" }, currency(account.balance))
+                            ]),
+                            e("div", { className: "muted mono" }, account.id),
+                            e("div", { className: "muted" }, account.transactionCount + " transactions")
+                        ]);
+                    })
+                ),
+                e(Pagination, {
+                    page: props.page,
+                    totalPages: props.totalPages,
+                    last: props.last,
+                    loading: props.loading,
+                    onChange: props.onPageChange
+                })
+            ]),
+            e("section", { key: "detail", className: "card detail-card" },
+                selected
+                    ? [
+                        e("div", { key: "head", className: "section-head" }, [
+                            e("div", null, [
+                                e("h3", null, selected.ownerName),
+                                e("div", { className: "muted" }, title(selected.accountType))
+                            ]),
+                            e("strong", { className: "mono detail-balance" }, currency(selected.balance))
+                        ]),
+                        e("div", { key: "meta", className: "detail-meta" },
+                            Object.entries(selected.metadata || {}).map(function (entry) {
+                                return e("div", { key: entry[0], className: "metric-row" }, [
+                                    e("span", null, entry[0]),
+                                    e("strong", null, entry[1])
+                                ]);
+                            })
+                        ),
+                        e("div", { key: "activity-head", className: "section-head section-head-tight" }, [
+                            e("h4", null, "Transaction history"),
+                            e("span", { className: "muted" }, "Paged activity view")
+                        ]),
+                        e("div", { key: "transactions", className: "transaction-list" },
+                            (props.transactions || []).map(function (transaction) {
+                                return e("div", { key: transaction.id, className: "transaction-row" }, [
+                                    e("div", null, [
+                                        e("strong", null, title(transaction.type.replace(/_/g, " "))),
+                                        e("div", { className: "muted" }, transaction.description)
+                                    ]),
+                                    e("strong", { className: "mono" }, currency(transaction.amount))
+                                ]);
+                            })
+                        ),
+                        e(Pagination, {
+                            key: "pager",
+                            page: props.transactionPage,
+                            totalPages: props.transactionTotalPages,
+                            last: props.transactionLast,
+                            loading: props.loading,
+                            onChange: props.onTransactionPageChange
+                        })
+                    ]
+                    : e("div", { className: "empty-state" }, [
+                        e("h3", null, "Select an account"),
+                        e("p", null, "Choose an account to review profile details and transaction history.")
+                    ])
+            )
+        ]);
+    }
+
+    function PaymentsPage(props) {
+        return e("div", { className: "page-grid" }, [
+            e("section", { key: "create", className: "card" }, [
+                e("div", { className: "section-head" }, [
+                    e("h3", null, "Open account"),
+                    e("span", { className: "muted" }, "Create a new customer account")
+                ]),
+                e("div", { className: "form-grid" }, [
                     e(Field, {
-                        id: "actionAccount",
+                        key: "owner",
+                        label: "Owner name",
+                        value: props.createForm.ownerName,
+                        onChange: function (value) { props.setCreateField("ownerName", value); },
+                        placeholder: "Katherine Johnson"
+                    }),
+                    e(Field, {
+                        key: "type",
+                        label: "Account type",
+                        type: "select",
+                        value: props.createForm.accountType,
+                        onChange: function (value) { props.setCreateField("accountType", value); },
+                        options: props.accountTypeOptions
+                    }),
+                    e(Field, {
+                        key: "opening",
+                        label: "Opening balance",
+                        type: "number",
+                        min: "0",
+                        value: props.createForm.openingBalance,
+                        onChange: function (value) { props.setCreateField("openingBalance", value); },
+                        placeholder: "2500"
+                    })
+                ]),
+                e("button", {
+                    className: "button button-primary button-block",
+                    onClick: props.onCreate,
+                    disabled: props.loading
+                }, props.loading ? "Creating..." : "Open account")
+            ]),
+            e("section", { key: "funds", className: "card" }, [
+                e("div", { className: "section-head" }, [
+                    e("h3", null, "Cash movement"),
+                    e("span", { className: "muted" }, "Deposit or withdraw against a single account")
+                ]),
+                e("div", { className: "form-grid" }, [
+                    e(Field, {
+                        key: "account",
                         label: "Account",
                         type: "select",
                         value: props.actionForm.accountId,
-                        onChange: function (value) { props.setActionForm("accountId", value); },
+                        onChange: function (value) { props.setActionField("accountId", value); },
                         options: props.accountOptions
                     }),
                     e(Field, {
-                        id: "actionAmount",
+                        key: "amount",
                         label: "Amount",
                         type: "number",
                         min: "0.01",
                         value: props.actionForm.amount,
-                        onChange: function (value) { props.setActionForm("amount", value); },
-                        placeholder: "250"
-                    }),
-                    e(Field, {
-                        id: "actionDescription",
-                        label: "Description",
-                        value: props.actionForm.description,
-                        onChange: function (value) { props.setActionForm("description", value); },
-                        placeholder: "ATM cash withdrawal"
-                    }),
-                    e("div", { className: "button-row" }, [
-                        e("button", {
-                            key: "deposit",
-                            className: "button button-primary",
-                            onClick: function () { props.onAmountAction("deposit"); },
-                            disabled: props.loading || !props.accountOptions.length
-                        }, "Deposit"),
-                        e("button", {
-                            key: "withdraw",
-                            className: "button button-ghost",
-                            onClick: function () { props.onAmountAction("withdraw"); },
-                            disabled: props.loading || !props.accountOptions.length
-                        }, "Withdraw")
-                    ])
-                ]),
-                e("div", { key: "transfer" }, [
-                    e(Field, {
-                        id: "sourceAccount",
-                        label: "Source account",
-                        type: "select",
-                        value: props.transferForm.sourceAccountId,
-                        onChange: function (value) { props.setTransferForm("sourceAccountId", value); },
-                        options: props.accountOptions
-                    }),
-                    e(Field, {
-                        id: "targetAccount",
-                        label: "Target account",
-                        type: "select",
-                        value: props.transferForm.targetAccountId,
-                        onChange: function (value) { props.setTransferForm("targetAccountId", value); },
-                        options: props.accountOptions
-                    }),
-                    e(Field, {
-                        id: "transferAmount",
-                        label: "Transfer amount",
-                        type: "number",
-                        min: "0.01",
-                        value: props.transferForm.amount,
-                        onChange: function (value) { props.setTransferForm("amount", value); },
+                        onChange: function (value) { props.setActionField("amount", value); },
                         placeholder: "500"
                     }),
                     e(Field, {
-                        id: "transferDescription",
+                        key: "desc",
+                        label: "Description",
+                        value: props.actionForm.description,
+                        onChange: function (value) { props.setActionField("description", value); },
+                        placeholder: "Branch cash deposit"
+                    })
+                ]),
+                e("div", { className: "button-row" }, [
+                    e("button", {
+                        key: "deposit",
+                        className: "button button-primary",
+                        onClick: function () { props.onAmountAction("deposit"); },
+                        disabled: props.loading || !props.accountOptions.length
+                    }, "Deposit"),
+                    e("button", {
+                        key: "withdraw",
+                        className: "button button-soft",
+                        onClick: function () { props.onAmountAction("withdraw"); },
+                        disabled: props.loading || !props.accountOptions.length
+                    }, "Withdraw")
+                ])
+            ]),
+            e("section", { key: "transfer", className: "card card-wide" }, [
+                e("div", { className: "section-head" }, [
+                    e("h3", null, "Transfer funds"),
+                    e("span", { className: "muted" }, "Move funds between bank accounts")
+                ]),
+                e("div", { className: "form-grid form-grid-4" }, [
+                    e(Field, {
+                        key: "source",
+                        label: "Source",
+                        type: "select",
+                        value: props.transferForm.sourceAccountId,
+                        onChange: function (value) { props.setTransferField("sourceAccountId", value); },
+                        options: props.accountOptions
+                    }),
+                    e(Field, {
+                        key: "target",
+                        label: "Target",
+                        type: "select",
+                        value: props.transferForm.targetAccountId,
+                        onChange: function (value) { props.setTransferField("targetAccountId", value); },
+                        options: props.accountOptions
+                    }),
+                    e(Field, {
+                        key: "amount",
+                        label: "Amount",
+                        type: "number",
+                        min: "0.01",
+                        value: props.transferForm.amount,
+                        onChange: function (value) { props.setTransferField("amount", value); },
+                        placeholder: "1200"
+                    }),
+                    e(Field, {
+                        key: "description",
                         label: "Transfer note",
                         value: props.transferForm.description,
-                        onChange: function (value) { props.setTransferForm("description", value); },
-                        placeholder: "Internal movement"
-                    }),
-                    e("div", { className: "button-row" }, [
-                        e("button", {
-                            key: "transferAction",
-                            className: "button button-accent",
-                            onClick: props.onTransfer,
-                            disabled: props.loading || !props.accountOptions.length
-                        }, "Transfer funds")
-                    ])
-                ])
+                        onChange: function (value) { props.setTransferField("description", value); },
+                        placeholder: "Quarterly reserve move"
+                    })
+                ]),
+                e("button", {
+                    className: "button button-accent",
+                    onClick: props.onTransfer,
+                    disabled: props.loading || !props.accountOptions.length
+                }, props.loading ? "Processing..." : "Transfer funds")
             ])
         ]);
     }
 
-    function SummaryPanel(props) {
-        var accountsByType = Object.entries(props.summary.accountsByType || {});
-        return e(Panel, { className: "stagger-3" }, [
-            e("div", { key: "header", className: "panel-header" }, [
-                e("div", { key: "titles" }, [
-                    e("h2", { key: "title" }, "Bank Snapshot"),
-                    e("p", { key: "copy", className: "panel-copy" }, "Live aggregate view from the backend summary endpoint.")
-                ]),
-                e("button", {
-                    key: "refresh",
-                    className: "button button-ghost",
-                    onClick: props.onRefresh,
-                    disabled: props.loading
-                }, "Refresh")
-            ]),
-            e("div", { key: "summary", className: "summary-grid" }, [
-                e("div", { key: "accounts", className: "summary-box" }, [
-                    e("span", null, "Total accounts"),
-                    e("strong", null, props.summary.totalAccounts || 0)
-                ]),
-                e("div", { key: "balance", className: "summary-box" }, [
-                    e("span", null, "Total balance"),
-                    e("strong", null, currency(props.summary.totalBalance))
-                ]),
-                e("div", { key: "average", className: "summary-box" }, [
-                    e("span", null, "Average balance"),
-                    e("strong", null, currency(props.summary.averageBalance))
-                ])
-            ]),
-            e("div", { key: "typeBreakdown", className: "subtle-list", style: { marginTop: "14px" } },
-                accountsByType.map(function (entry) {
-                    return e("div", { key: entry[0] }, title(entry[0]) + ": " + entry[1]);
-                })
-            ),
-            e("div", { key: "premium", className: "footer-note" },
-                props.summary.premiumOwners && props.summary.premiumOwners.length
-                    ? "Premium owners: " + props.summary.premiumOwners.join(" | ")
-                    : "No premium accounts currently cross the configured threshold."
-            )
-        ]);
-    }
-
-    function AccountsPanel(props) {
-        return e(Panel, null, [
-            e("div", { key: "header", className: "panel-header" }, [
-                e("div", { key: "titles" }, [
-                    e("h2", { key: "title" }, "Accounts"),
-                    e("p", { key: "copy", className: "panel-copy" }, "Inspect balances, metadata, and recent transactions.")
-                ]),
-                e("button", {
-                    key: "refresh",
-                    className: "button button-ghost",
-                    onClick: props.onRefresh,
-                    disabled: props.loading
-                }, "Reload accounts")
-            ]),
-            e("div", { key: "list", className: "account-list" },
-                props.accounts.map(function (account) {
-                    return e("article", { key: account.id, className: "account-card" }, [
-                        e("div", { key: "top", className: "account-card-top" }, [
-                            e("div", { key: "identity" }, [
-                                e("h3", null, account.ownerName),
-                                e("div", { className: "account-meta mono" }, [
-                                    e("div", { key: "id" }, account.id),
-                                    e("div", { key: "type" }, title(account.accountType))
-                                ])
-                            ]),
-                            e("div", { key: "bal", className: "account-balance mono" }, currency(account.balance))
-                        ]),
-                        e("div", { key: "badges", className: "badge-row" },
-                            (account.tags || []).map(function (tag, index) {
-                                return e("span", { key: tag + index, className: "badge" }, tag);
-                            })
-                        ),
-                        e("div", { key: "meta", className: "subtle-list", style: { marginTop: "12px" } },
-                            Object.entries(account.metadata || {}).map(function (entry) {
-                                return e("div", { key: entry[0] }, entry[0] + ": " + entry[1]);
-                            })
-                        ),
-                        e("div", { key: "transactions", className: "transactions" },
-                            (account.transactions || []).slice(-4).reverse().map(function (transaction) {
-                                return e("div", { key: transaction.id, className: "transaction-item" }, [
-                                    e("div", { key: "left" }, [
-                                        e("strong", null, title(transaction.type.replace(/_/g, " "))),
-                                        e("div", { className: "account-meta" }, transaction.description)
-                                    ]),
-                                    e("div", { key: "right", className: "mono" }, currency(transaction.amount))
-                                ]);
-                            })
-                        )
-                    ]);
-                })
-            )
-        ]);
-    }
-
     function App() {
-        var emptySummary = { totalAccounts: 0, totalBalance: 0, averageBalance: 0, accountsByType: {}, premiumOwners: [] };
+        var [route, setRouteState] = useState(getRoute());
+        var [session, setSession] = useState(readSession());
+        var [banner, setBanner] = useState({ kind: "success", text: "" });
+        var [loading, setLoading] = useState(false);
 
-        var initialCreateForm = { ownerName: "", accountType: "CHECKING", openingBalance: "0" };
-        var [createForm, setCreateForm] = useState(initialCreateForm);
+        var [loginForm, setLoginForm] = useState({ email: "demo@youbank.com", password: "password123" });
+        var [signupForm, setSignupForm] = useState({ fullName: "", email: "", password: "" });
+
+        var [summary, setSummary] = useState({ totalAccounts: 0, totalBalance: 0, averageBalance: 0, accountsByType: {}, premiumOwners: [] });
+        var [dashboardAccounts, setDashboardAccounts] = useState([]);
+        var [accountPage, setAccountPage] = useState({ content: [], page: 0, totalPages: 1, last: true });
+        var [selectedAccount, setSelectedAccount] = useState(null);
+        var [transactionPage, setTransactionPage] = useState({ content: [], page: 0, totalPages: 1, last: true });
+
+        var [createForm, setCreateForm] = useState({ ownerName: "", accountType: "CHECKING", openingBalance: "0" });
         var [actionForm, setActionFormState] = useState({ accountId: "", amount: "", description: "" });
         var [transferForm, setTransferFormState] = useState({ sourceAccountId: "", targetAccountId: "", amount: "", description: "" });
-        var [accounts, setAccounts] = useState([]);
-        var [summary, setSummary] = useState(emptySummary);
-        var [loading, setLoading] = useState(false);
-        var [message, setMessage] = useState({ kind: "success", text: "" });
+        var [accountOptions, setAccountOptions] = useState([]);
+
+        useEffect(function () {
+            function onHashChange() {
+                setRouteState(getRoute());
+            }
+            window.addEventListener("hashchange", onHashChange);
+            return function () {
+                window.removeEventListener("hashchange", onHashChange);
+            };
+        }, []);
+
+        useEffect(function () {
+            if (session && (route === "/login" || route === "/signup" || route === "/")) {
+                setRoute("/dashboard");
+            }
+            if (!session && route !== "/login" && route !== "/signup") {
+                setRoute("/login");
+            }
+        }, [session, route]);
+
+        useEffect(function () {
+            if (session) {
+                loadDashboard(true);
+                loadAccountsPage(0, true);
+                loadAccountOptions(true);
+            }
+        }, [session]);
+
+        function flash(kind, text) {
+            setBanner({ kind: kind, text: text });
+        }
+
+        function setLoginField(field, value) {
+            setLoginForm(function (prev) {
+                var next = Object.assign({}, prev);
+                next[field] = value;
+                return next;
+            });
+        }
+
+        function setSignupField(field, value) {
+            setSignupForm(function (prev) {
+                var next = Object.assign({}, prev);
+                next[field] = value;
+                return next;
+            });
+        }
 
         function setCreateField(field, value) {
             setCreateForm(function (prev) {
@@ -399,62 +670,157 @@
             });
         }
 
-        function setFlash(kind, text) {
-            setMessage({ kind: kind, text: text });
-        }
-
-        function normalizeAccountSelection(items) {
-            if (!items.length) {
-                setActionFormState({ accountId: "", amount: "", description: "" });
-                setTransferFormState({ sourceAccountId: "", targetAccountId: "", amount: "", description: "" });
-                return;
+        function normalizeSelectors(items) {
+            var options = items.map(function (account) {
+                return {
+                    value: account.id,
+                    label: account.ownerName + " - " + title(account.accountType) + " - " + currency(account.balance)
+                };
+            });
+            setAccountOptions(options);
+            if (options.length) {
+                setActionFormState(function (prev) {
+                    return Object.assign({}, prev, { accountId: prev.accountId || options[0].value });
+                });
+                setTransferFormState(function (prev) {
+                    return Object.assign({}, prev, {
+                        sourceAccountId: prev.sourceAccountId || options[0].value,
+                        targetAccountId: prev.targetAccountId || options[Math.min(1, options.length - 1)].value
+                    });
+                });
             }
+        }
 
-            setActionFormState(function (prev) {
-                return Object.assign({}, prev, {
-                    accountId: prev.accountId || items[0].id
-                });
-            });
-
-            setTransferFormState(function (prev) {
-                return Object.assign({}, prev, {
-                    sourceAccountId: prev.sourceAccountId || items[0].id,
-                    targetAccountId: prev.targetAccountId || items[Math.min(1, items.length - 1)].id
-                });
+        function loadDashboard(silent) {
+            if (!silent) {
+                setLoading(true);
+            }
+            return Promise.all([
+                api("/api/accounts/summary", null, session),
+                api("/api/accounts?page=0&size=4", null, session)
+            ]).then(function (results) {
+                setSummary(results[0]);
+                setDashboardAccounts(results[1].content || []);
+            }).catch(function (error) {
+                flash("error", error.message);
+            }).finally(function () {
+                if (!silent) {
+                    setLoading(false);
+                }
             });
         }
 
-        function loadAll(silent) {
-            setLoading(!silent);
-            return Promise.all([
-                api("/api/accounts"),
-                api("/api/accounts/summary")
-            ]).then(function (results) {
-                setAccounts(results[0]);
-                setSummary(results[1]);
-                normalizeAccountSelection(results[0]);
-                if (!silent) {
-                    setFlash("success", "Dashboard refreshed from live backend data.");
-                }
+        function loadAccountOptions(silent) {
+            if (!silent) {
+                setLoading(true);
+            }
+            return api("/api/accounts?page=0&size=100", null, session).then(function (result) {
+                normalizeSelectors(result.content || []);
             }).catch(function (error) {
-                setFlash("error", error.message);
+                flash("error", error.message);
+            }).finally(function () {
+                if (!silent) {
+                    setLoading(false);
+                }
+            });
+        }
+
+        function loadAccountsPage(page, silent) {
+            if (!silent) {
+                setLoading(true);
+            }
+            return api("/api/accounts?page=" + page + "&size=6", null, session).then(function (result) {
+                setAccountPage(result);
+                if (result.content && result.content.length) {
+                    var firstSelection = selectedAccount && result.content.some(function (item) { return item.id === selectedAccount.id; })
+                        ? selectedAccount.id
+                        : result.content[0].id;
+                    return loadAccountDetail(firstSelection, 0, true);
+                }
+                setSelectedAccount(null);
+                setTransactionPage({ content: [], page: 0, totalPages: 1, last: true });
+                return null;
+            }).catch(function (error) {
+                flash("error", error.message);
+            }).finally(function () {
+                if (!silent) {
+                    setLoading(false);
+                }
+            });
+        }
+
+        function loadAccountDetail(accountId, txPage, silent) {
+            if (!silent) {
+                setLoading(true);
+            }
+            return Promise.all([
+                api("/api/accounts/" + accountId, null, session),
+                api("/api/accounts/" + accountId + "/transactions?page=" + txPage + "&size=5", null, session)
+            ]).then(function (results) {
+                setSelectedAccount(results[0]);
+                setTransactionPage(results[1]);
+            }).catch(function (error) {
+                flash("error", error.message);
+            }).finally(function () {
+                if (!silent) {
+                    setLoading(false);
+                }
+            });
+        }
+
+        function afterMutation(message) {
+            return Promise.all([
+                loadDashboard(true),
+                loadAccountsPage(accountPage.page || 0, true),
+                loadAccountOptions(true)
+            ]).then(function () {
+                flash("success", message);
+            });
+        }
+
+        function login() {
+            setLoading(true);
+            api("/api/auth/login", {
+                method: "POST",
+                body: JSON.stringify(loginForm)
+            }).then(function (result) {
+                writeSession(result);
+                setSession(result);
+                flash("success", "Signed in successfully.");
+                setRoute("/dashboard");
+            }).catch(function (error) {
+                flash("error", error.message);
             }).finally(function () {
                 setLoading(false);
             });
         }
 
-        useEffect(function () {
-            loadAll(true);
-        }, []);
+        function signup() {
+            setLoading(true);
+            api("/api/auth/signup", {
+                method: "POST",
+                body: JSON.stringify(signupForm)
+            }).then(function (result) {
+                writeSession(result);
+                setSession(result);
+                flash("success", "Profile created. Welcome to You Bank.");
+                setRoute("/dashboard");
+            }).catch(function (error) {
+                flash("error", error.message);
+            }).finally(function () {
+                setLoading(false);
+            });
+        }
 
-        var accountOptions = accounts.map(function (account) {
-            return {
-                value: account.id,
-                label: account.ownerName + " - " + title(account.accountType) + " - " + currency(account.balance)
-            };
-        });
+        function logout() {
+            clearSession();
+            setSession(null);
+            setSelectedAccount(null);
+            setBanner({ kind: "success", text: "" });
+            setRoute("/login");
+        }
 
-        function submitCreateAccount() {
+        function createAccount() {
             setLoading(true);
             api("/api/accounts", {
                 method: "POST",
@@ -463,39 +829,37 @@
                     accountType: createForm.accountType,
                     openingBalance: Number(createForm.openingBalance)
                 })
-            }).then(function (created) {
-                setCreateForm(initialCreateForm);
-                setFlash("success", "Created account for " + created.ownerName + ".");
-                return loadAll(true);
+            }, session).then(function () {
+                setCreateForm({ ownerName: "", accountType: "CHECKING", openingBalance: "0" });
+                return afterMutation("Account opened successfully.");
             }).catch(function (error) {
-                setFlash("error", error.message);
+                flash("error", error.message);
             }).finally(function () {
                 setLoading(false);
             });
         }
 
-        function runAmountAction(kind) {
+        function amountAction(type) {
             setLoading(true);
-            api("/api/accounts/" + actionForm.accountId + "/" + kind, {
+            api("/api/accounts/" + actionForm.accountId + "/" + type, {
                 method: "POST",
                 body: JSON.stringify({
                     amount: Number(actionForm.amount),
                     description: actionForm.description
                 })
-            }).then(function () {
+            }, session).then(function () {
                 setActionFormState(function (prev) {
                     return Object.assign({}, prev, { amount: "", description: "" });
                 });
-                setFlash("success", title(kind) + " completed.");
-                return loadAll(true);
+                return afterMutation(title(type) + " completed.");
             }).catch(function (error) {
-                setFlash("error", error.message);
+                flash("error", error.message);
             }).finally(function () {
                 setLoading(false);
             });
         }
 
-        function runTransfer() {
+        function transfer() {
             setLoading(true);
             api("/api/accounts/transfer", {
                 method: "POST",
@@ -505,65 +869,105 @@
                     amount: Number(transferForm.amount),
                     description: transferForm.description
                 })
-            }).then(function () {
+            }, session).then(function () {
                 setTransferFormState(function (prev) {
                     return Object.assign({}, prev, { amount: "", description: "" });
                 });
-                setFlash("success", "Transfer completed.");
-                return loadAll(true);
+                return afterMutation("Transfer completed.");
             }).catch(function (error) {
-                setFlash("error", error.message);
+                flash("error", error.message);
             }).finally(function () {
                 setLoading(false);
             });
         }
 
-        return e("main", { className: "app-shell" }, [
-            e(Hero, {
-                key: "hero",
-                totalAccounts: summary.totalAccounts || 0,
-                totalBalance: summary.totalBalance || 0,
-                averageBalance: summary.averageBalance || 0
-            }),
-            e(MessageBanner, { key: "msg", kind: message.kind, message: message.text }),
-            e("div", { key: "layout", className: "layout" }, [
-                e("div", { key: "left", className: "stack" }, [
-                    e(CreateAccountPanel, {
-                        key: "create",
-                        form: createForm,
-                        setForm: setCreateField,
-                        onSubmit: submitCreateAccount,
-                        onReset: function () { setCreateForm(initialCreateForm); },
-                        loading: loading
-                    }),
-                    e(ActionPanel, {
-                        key: "action",
-                        actionForm: actionForm,
-                        setActionForm: setActionField,
-                        transferForm: transferForm,
-                        setTransferForm: setTransferField,
-                        onAmountAction: runAmountAction,
-                        onTransfer: runTransfer,
-                        loading: loading,
-                        accountOptions: accountOptions
-                    }),
-                    e(SummaryPanel, {
-                        key: "summary",
-                        summary: summary,
-                        onRefresh: function () { loadAll(false); },
-                        loading: loading
-                    })
-                ]),
-                e("div", { key: "right", className: "stack" }, [
-                    e(AccountsPanel, {
-                        key: "accounts",
-                        accounts: accounts,
-                        onRefresh: function () { loadAll(false); },
-                        loading: loading
-                    })
-                ])
-            ])
-        ]);
+        if (!session && route === "/signup") {
+            return e(SignupPage, {
+                form: signupForm,
+                setForm: setSignupField,
+                onSubmit: signup,
+                loading: loading,
+                banner: banner.text,
+                bannerKind: banner.kind
+            });
+        }
+
+        if (!session) {
+            return e(LoginPage, {
+                form: loginForm,
+                setForm: setLoginField,
+                onSubmit: login,
+                loading: loading,
+                banner: banner.text,
+                bannerKind: banner.kind
+            });
+        }
+
+        var heading = route === "/accounts"
+            ? "Accounts"
+            : route === "/payments"
+                ? "Payments"
+                : "Dashboard";
+
+        return e(Shell, {
+            route: route,
+            session: session,
+            heading: heading,
+            banner: banner.text,
+            bannerKind: banner.kind,
+            onLogout: logout
+        }, route === "/accounts"
+            ? e(AccountsPage, {
+                accounts: accountPage.content || [],
+                page: accountPage.page || 0,
+                totalPages: accountPage.totalPages || 1,
+                last: accountPage.last,
+                selectedAccount: selectedAccount,
+                transactions: transactionPage.content || [],
+                transactionPage: transactionPage.page || 0,
+                transactionTotalPages: transactionPage.totalPages || 1,
+                transactionLast: transactionPage.last,
+                loading: loading,
+                onRefresh: function () { loadAccountsPage(accountPage.page || 0, false); },
+                onPageChange: function (page) { loadAccountsPage(page, false); },
+                onSelect: function (accountId) { loadAccountDetail(accountId, 0, false); },
+                onTransactionPageChange: function (page) {
+                    if (selectedAccount) {
+                        loadAccountDetail(selectedAccount.id, page, false);
+                    }
+                }
+            })
+            : route === "/payments"
+                ? e(PaymentsPage, {
+                    createForm: createForm,
+                    setCreateField: setCreateField,
+                    actionForm: actionForm,
+                    setActionField: setActionField,
+                    transferForm: transferForm,
+                    setTransferField: setTransferField,
+                    accountOptions: accountOptions,
+                    accountTypeOptions: [
+                        { value: "CHECKING", label: "Checking" },
+                        { value: "SAVINGS", label: "Savings" },
+                        { value: "BUSINESS", label: "Business" }
+                    ],
+                    loading: loading,
+                    onCreate: createAccount,
+                    onAmountAction: amountAction,
+                    onTransfer: transfer
+                })
+                : e(DashboardPage, {
+                    summary: summary,
+                    accounts: dashboardAccounts,
+                    loading: loading,
+                    onRefresh: function () {
+                        setLoading(true);
+                        Promise.all([loadDashboard(true), loadAccountOptions(true)]).finally(function () {
+                            setLoading(false);
+                        });
+                    }
+                })
+        );
     }
 
     ReactDOM.createRoot(document.getElementById("root")).render(e(App));
