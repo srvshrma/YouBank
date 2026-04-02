@@ -83,7 +83,7 @@
             e("div", { key: "main", className: "hero-card fade-in" }, [
                 e("div", { key: "kicker", className: "hero-kicker mono" }, "Spring Boot + React Test Console"),
                 e("h1", { key: "title" }, "You Bank Control Room"),
-                e("p", { key: "copy" }, "Run real account operations against your Spring Boot API, inspect transaction state, and browse the Java 8 language showcase without leaving one screen."),
+                e("p", { key: "copy" }, "Run real account operations against your Spring Boot API, inspect transaction state, and validate the banking flows from one screen."),
                 e("div", { key: "meta", className: "hero-meta" }, [
                     e("div", { key: "accounts", className: "stat-chip" }, [
                         e("span", { key: "label" }, "Accounts"),
@@ -105,10 +105,10 @@
                     e("div", { className: "value mono" }, "/api/accounts"),
                     e("div", { className: "panel-copy" }, "Same-origin UI served directly by Spring Boot.")
                 ]),
-                e("div", { key: "showcase" }, [
-                    e("span", { className: "eyebrow mono" }, "Showcase"),
-                    e("div", { className: "value mono" }, "/api/showcase/java8"),
-                    e("div", { className: "panel-copy" }, "Useful now for demos, useful later for Java 11 comparisons.")
+                e("div", { key: "summary" }, [
+                    e("span", { className: "eyebrow mono" }, "Overview"),
+                    e("div", { className: "value mono" }, "/api/accounts/summary"),
+                    e("div", { className: "panel-copy" }, "Live metrics for balances, averages, and premium accounts.")
                 ])
             ])
         ]);
@@ -363,64 +363,8 @@
         ]);
     }
 
-    function ShowcasePanel(props) {
-        var showcaseItems = [
-            ["Lambda", props.data.lambdaExample],
-            ["Method references", (props.data.methodReferenceOwners || []).join(", ")],
-            ["Optional", props.data.optionalExample],
-            ["Default interface method", props.data.defaultMethodExample],
-            ["Static interface method", props.data.staticInterfaceMethodExample],
-            ["Stream collectors", props.data.streamCollectorExample],
-            ["Date/time API", props.data.dateTimeExample],
-            ["CompletableFuture", props.data.completableFutureExample],
-            ["Base64", props.data.base64Example],
-            ["StringJoiner", props.data.stringJoinerExample],
-            ["Map enhancements", JSON.stringify(props.data.mapEnhancementExample || {}, null, 2)],
-            ["Repeatable annotations", (props.data.repeatableAnnotations || []).join(", ")],
-            ["Type annotations", props.data.typeAnnotationExample]
-        ];
-
-        return e(Panel, null, [
-            e("div", { key: "header", className: "panel-header" }, [
-                e("div", { key: "titles" }, [
-                    e("h2", { key: "title" }, "Java 8 Showcase"),
-                    e("p", { key: "copy", className: "panel-copy" }, "Everything here is coming from the dedicated backend showcase service.")
-                ]),
-                e("button", {
-                    key: "refresh",
-                    className: "button button-ghost",
-                    onClick: props.onRefresh,
-                    disabled: props.loading
-                }, "Refresh showcase")
-            ]),
-            e("div", { key: "grid", className: "showcase-grid" },
-                showcaseItems.map(function (item) {
-                    return e("div", { key: item[0], className: "showcase-box" }, [
-                        e("h4", { key: "title" }, item[0]),
-                        e("pre", { key: "value" }, item[1] || "n/a")
-                    ]);
-                })
-            )
-        ]);
-    }
-
     function App() {
         var emptySummary = { totalAccounts: 0, totalBalance: 0, averageBalance: 0, accountsByType: {}, premiumOwners: [] };
-        var emptyShowcase = {
-            lambdaExample: "",
-            methodReferenceOwners: [],
-            optionalExample: "",
-            defaultMethodExample: "",
-            staticInterfaceMethodExample: "",
-            streamCollectorExample: "",
-            dateTimeExample: "",
-            completableFutureExample: "",
-            base64Example: "",
-            stringJoinerExample: "",
-            mapEnhancementExample: {},
-            repeatableAnnotations: [],
-            typeAnnotationExample: ""
-        };
 
         var initialCreateForm = { ownerName: "", accountType: "CHECKING", openingBalance: "0" };
         var [createForm, setCreateForm] = useState(initialCreateForm);
@@ -428,7 +372,6 @@
         var [transferForm, setTransferFormState] = useState({ sourceAccountId: "", targetAccountId: "", amount: "", description: "" });
         var [accounts, setAccounts] = useState([]);
         var [summary, setSummary] = useState(emptySummary);
-        var [showcase, setShowcase] = useState(emptyShowcase);
         var [loading, setLoading] = useState(false);
         var [message, setMessage] = useState({ kind: "success", text: "" });
 
@@ -485,12 +428,10 @@
             setLoading(!silent);
             return Promise.all([
                 api("/api/accounts"),
-                api("/api/accounts/summary"),
-                api("/api/showcase/java8")
+                api("/api/accounts/summary")
             ]).then(function (results) {
                 setAccounts(results[0]);
                 setSummary(results[1]);
-                setShowcase(results[2]);
                 normalizeAccountSelection(results[0]);
                 if (!silent) {
                     setFlash("success", "Dashboard refreshed from live backend data.");
@@ -617,12 +558,6 @@
                     e(AccountsPanel, {
                         key: "accounts",
                         accounts: accounts,
-                        onRefresh: function () { loadAll(false); },
-                        loading: loading
-                    }),
-                    e(ShowcasePanel, {
-                        key: "showcase",
-                        data: showcase,
                         onRefresh: function () { loadAll(false); },
                         loading: loading
                     })

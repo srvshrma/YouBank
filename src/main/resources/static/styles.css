@@ -327,8 +327,7 @@ textarea {
 }
 
 .account-meta,
-.subtle-list,
-.showcase-list {
+.subtle-list {
     display: grid;
     gap: 8px;
     color: var(--muted);
@@ -391,32 +390,6 @@ textarea {
     font-size: 1.35rem;
 }
 
-.showcase-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-}
-
-.showcase-box {
-    padding: 16px;
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.72);
-    border: 1px solid rgba(29, 27, 25, 0.08);
-}
-
-.showcase-box h4 {
-    margin: 0 0 10px;
-}
-
-.showcase-box pre {
-    margin: 0;
-    white-space: pre-wrap;
-    word-break: break-word;
-    color: var(--muted);
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 0.84rem;
-}
-
 .footer-note {
     margin-top: 18px;
     color: var(--muted);
@@ -477,7 +450,6 @@ textarea {
 
     .grid-2,
     .grid-3,
-    .showcase-grid,
     .summary-grid {
         grid-template-columns: 1fr;
     }

@@ -4,7 +4,6 @@ import com.bank.dto.CreateAccountRequest;
 import com.bank.dto.TransferRequest;
 import com.bank.model.AccountType;
 import com.bank.service.BankingService;
-import com.bank.service.Java8FeatureShowcaseService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,9 +17,6 @@ class YouBankApplicationTests {
 
     @Autowired
     private BankingService bankingService;
-
-    @Autowired
-    private Java8FeatureShowcaseService showcaseService;
 
     @Test
     void shouldCreateAccountsTransferFundsAndBuildSummary() {
@@ -48,12 +44,5 @@ class YouBankApplicationTests {
         assertThat(bankingService.getAccount(sourceId).getBalance()).isEqualByComparingTo("800.00");
         assertThat(bankingService.getAccount(targetId).getBalance()).isEqualByComparingTo("710.00");
         assertThat(bankingService.getSummary().getTotalAccounts()).isGreaterThanOrEqualTo(5);
-    }
-
-    @Test
-    void shouldExposeJava8ShowcaseData() {
-        assertThat(showcaseService.buildShowcase().getLambdaExample()).isNotBlank();
-        assertThat(showcaseService.buildShowcase().getRepeatableAnnotations()).contains("service-created", "service-reviewed");
-        assertThat(showcaseService.buildShowcase().getCompletableFutureExample()).contains("PORTFOLIO");
     }
 }
