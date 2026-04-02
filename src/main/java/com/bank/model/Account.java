@@ -26,9 +26,9 @@ public class Account {
         this.accountType = accountType;
         this.balance = openingBalance;
         this.createdAt = LocalDateTime.now();
-        this.transactions = new ArrayList<Transaction>();
-        this.tags = new ArrayList<String>();
-        this.metadata = new LinkedHashMap<String, String>();
+        this.transactions = new ArrayList<>();
+        this.tags = new ArrayList<>();
+        this.metadata = new LinkedHashMap<>();
     }
 
     public String getId() {

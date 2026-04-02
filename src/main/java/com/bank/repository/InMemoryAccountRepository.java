@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentMap;
 @Repository
 public class InMemoryAccountRepository implements AccountRepository {
 
-    private final ConcurrentMap<String, Account> accounts = new ConcurrentHashMap<String, Account>();
+    private final ConcurrentMap<String, Account> accounts = new ConcurrentHashMap<>();
 
     @Override
     public Account save(Account account) {
@@ -27,6 +27,6 @@ public class InMemoryAccountRepository implements AccountRepository {
 
     @Override
     public List<Account> findAll() {
-        return new ArrayList<Account>(accounts.values());
+        return new ArrayList<>(accounts.values());
     }
 }

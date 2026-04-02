@@ -1,5 +1,8 @@
 package com.bank.dto;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -34,8 +37,8 @@ public class Java8ShowcaseResponse {
         this.completableFutureExample = completableFutureExample;
         this.base64Example = base64Example;
         this.stringJoinerExample = stringJoinerExample;
-        this.mapEnhancementExample = mapEnhancementExample;
-        this.repeatableAnnotations = repeatableAnnotations;
+        this.mapEnhancementExample = Collections.unmodifiableMap(new LinkedHashMap<>(mapEnhancementExample));
+        this.repeatableAnnotations = Collections.unmodifiableList(new ArrayList<>(repeatableAnnotations));
         this.typeAnnotationExample = typeAnnotationExample;
     }
 

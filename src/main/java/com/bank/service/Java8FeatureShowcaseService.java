@@ -1,5 +1,6 @@
 package com.bank.service;
 
+import com.bank.dto.AccountResponse;
 import com.bank.dto.Java8ShowcaseResponse;
 import com.bank.model.Account;
 import com.bank.util.AccountFormatter;
@@ -11,6 +12,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,6 +25,8 @@ import java.util.stream.Collectors;
 @Service
 public class Java8FeatureShowcaseService {
 
+    private static final ZoneId INDIA_ZONE = ZoneId.of("Asia/Kolkata");
+
     private final BankingService bankingService;
 
     public Java8FeatureShowcaseService(BankingService bankingService) {
@@ -29,36 +34,41 @@ public class Java8FeatureShowcaseService {
     }
 
     public Java8ShowcaseResponse buildShowcase() {
-        String lambdaExample = bankingService.getAllAccounts().stream()
+        List<AccountResponse> accounts = bankingService.getAllAccounts();
+
+        String lambdaExample = accounts.stream()
                 .map(account -> account.getOwnerName().toUpperCase())
                 .findFirst()
                 .orElse("NO-ACCOUNTS");
 
-        List<String> methodReferenceOwners = bankingService.getAllAccounts().stream()
-                .map(com.bank.dto.AccountResponse::getOwnerName)
+        List<String> methodReferenceOwners = accounts.stream()
+                .map(AccountResponse::getOwnerName)
                 .collect(Collectors.toList());
+        List<String> ownerNamesWithCleanup = new ArrayList<>(methodReferenceOwners);
+        ownerNamesWithCleanup.add("");
+        ownerNamesWithCleanup.removeIf(String::isEmpty);
 
         String optionalExample = bankingService.findByOwner("Ada Lovelace")
                 .map(Account::getOwnerName)
                 .orElse("Fallback owner via Optional");
 
-        String defaultMethodExample = bankingService.getAllAccounts().stream()
+        String defaultMethodExample = accounts.stream()
                 .findFirst()
                 .map(response -> bankingService.formatSummary(convert(response)))
                 .orElse("No accounts to format");
 
-        String staticInterfaceMethodExample = bankingService.getAllAccounts().stream()
+        String staticInterfaceMethodExample = accounts.stream()
                 .findFirst()
                 .map(response -> AccountFormatter.auditLabel(response.getId()))
                 .orElse("formatted-none");
 
-        String streamCollectorExample = bankingService.getAllAccounts().stream()
+        String streamCollectorExample = accounts.stream()
                 .collect(Collectors.groupingBy(account -> account.getAccountType().name(), LinkedHashMap::new, Collectors.counting()))
                 .entrySet().stream()
                 .map(entry -> entry.getKey() + "=" + entry.getValue())
                 .collect(Collectors.joining(", "));
 
-        String dateTimeExample = LocalDate.now(ZoneId.of("Asia/Kolkata")).format(DateTimeFormatter.ISO_DATE);
+        String dateTimeExample = LocalDate.now(INDIA_ZONE).format(DateTimeFormatter.ISO_DATE);
 
         String completableFutureExample = CompletableFuture.supplyAsync(bankingService::describePortfolio)
                 .thenApply(String::toUpperCase)
@@ -70,11 +80,11 @@ public class Java8FeatureShowcaseService {
         StringJoiner joiner = new StringJoiner(" -> ", "features[", "]");
         joiner.add("lambda").add("streams").add("optional").add("completableFuture");
 
-        Map<String, Integer> mapEnhancementExample = new LinkedHashMap<String, Integer>();
-        methodReferenceOwners.forEach(owner -> mapEnhancementExample.merge(owner, owner.length(), Integer::sum));
+        Map<String, Integer> mapEnhancementExample = new LinkedHashMap<>();
+        ownerNamesWithCleanup.forEach(owner -> mapEnhancementExample.merge(owner, owner.length(), Integer::sum));
         mapEnhancementExample.computeIfAbsent("fallback-owner", key -> key.length());
 
-        List<String> repeatableAnnotations = java.util.Arrays.stream(BankingService.class.getAnnotationsByType(BankAudit.class))
+        List<String> repeatableAnnotations = Arrays.stream(BankingService.class.getAnnotationsByType(BankAudit.class))
                 .map(BankAudit::value)
                 .collect(Collectors.toList());
 
@@ -97,7 +107,7 @@ public class Java8FeatureShowcaseService {
         );
     }
 
-    private Account convert(com.bank.dto.AccountResponse response) {
+    private Account convert(AccountResponse response) {
         Account account = new Account(response.getOwnerName(), response.getAccountType(), response.getBalance());
         response.getTags().forEach(account::addTag);
         response.getMetadata().forEach(account::putMetadata);

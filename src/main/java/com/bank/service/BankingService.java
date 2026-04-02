@@ -7,6 +7,7 @@ import com.bank.dto.TransferRequest;
 import com.bank.exception.AccountNotFoundException;
 import com.bank.exception.InsufficientFundsException;
 import com.bank.model.Account;
+import com.bank.model.AccountType;
 import com.bank.model.TransactionType;
 import com.bank.repository.AccountRepository;
 import com.bank.util.AccountFormatter;
@@ -16,6 +17,8 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,31 +32,33 @@ import java.util.stream.Collectors;
 @BankAudit("service-reviewed")
 public class BankingService implements AccountFormatter {
 
+    private static final BigDecimal ZERO_AMOUNT = BigDecimal.ZERO;
+    private static final BigDecimal SAVINGS_INTEREST_RATE = new BigDecimal("0.02");
+    private static final BigDecimal PREMIUM_THRESHOLD = new BigDecimal("5000");
+
     private final AccountRepository accountRepository;
-    private final InterestStrategy savingsInterest = balance -> balance.multiply(new BigDecimal("0.02"));
+    private final InterestStrategy savingsInterest = balance -> balance.multiply(SAVINGS_INTEREST_RATE);
 
     public BankingService(AccountRepository accountRepository) {
         this.accountRepository = accountRepository;
     }
 
     public AccountResponse createAccount(CreateAccountRequest request) {
-        Account account = new Account(request.getOwnerName().trim(), request.getAccountType(), BigDecimal.ZERO);
-        java.util.ArrayList<String> tags = new java.util.ArrayList<String>();
+        Account account = new Account(request.getOwnerName().trim(), request.getAccountType(), ZERO_AMOUNT);
+        List<String> tags = new ArrayList<>();
         tags.add("java8");
         tags.add(request.getAccountType().name().toLowerCase());
-        tags.add("");
-        tags.removeIf(String::isEmpty);
         tags.forEach(account::addTag);
         account.putMetadata("createdBy", "lambda-onboarding");
         account.putMetadata("auditKey", AccountRepository.auditKey(account.getId()));
 
-        if (request.getOpeningBalance().compareTo(BigDecimal.ZERO) > 0) {
+        if (request.getOpeningBalance().compareTo(ZERO_AMOUNT) > 0) {
             account.addFunds(request.getOpeningBalance(), TransactionType.DEPOSIT, "Opening balance applied", null);
         }
 
-        if ("SAVINGS".equals(request.getAccountType().name())) {
+        if (request.getAccountType() == AccountType.SAVINGS) {
             BigDecimal bonus = savingsInterest.apply(request.getOpeningBalance()).setScale(2, RoundingMode.HALF_UP);
-            if (bonus.compareTo(BigDecimal.ZERO) > 0) {
+            if (bonus.compareTo(ZERO_AMOUNT) > 0) {
                 account.addFunds(bonus, TransactionType.INTEREST, "Java 8 lambda interest bonus", null);
             }
         }
@@ -100,23 +105,23 @@ public class BankingService implements AccountFormatter {
         target.addFunds(request.getAmount(), TransactionType.TRANSFER_IN, request.getDescription(), source.getId());
         accountRepository.save(source);
         accountRepository.save(target);
-        return java.util.Arrays.asList(AccountResponse.from(source), AccountResponse.from(target));
+        return Arrays.asList(AccountResponse.from(source), AccountResponse.from(target));
     }
 
     public BankSummaryResponse getSummary() {
         List<Account> accounts = accountRepository.findAll();
         BigDecimal totalBalance = accounts.stream()
                 .map(Account::getBalance)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .reduce(ZERO_AMOUNT, BigDecimal::add);
         BigDecimal average = accounts.isEmpty()
-                ? BigDecimal.ZERO
-                : totalBalance.divide(new BigDecimal(accounts.size()), 2, RoundingMode.HALF_UP);
+                ? ZERO_AMOUNT
+                : totalBalance.divide(BigDecimal.valueOf(accounts.size()), 2, RoundingMode.HALF_UP);
 
         Map<String, Long> accountsByType = accounts.stream()
                 .collect(Collectors.groupingBy(account -> account.getAccountType().name(), LinkedHashMap::new, Collectors.counting()));
 
         List<String> premiumOwners = accounts.stream()
-                .filter(account -> account.getBalance().compareTo(new BigDecimal("5000")) >= 0)
+                .filter(account -> account.getBalance().compareTo(PREMIUM_THRESHOLD) >= 0)
                 .map(this::formatSummary)
                 .collect(Collectors.toList());
 
@@ -133,7 +138,7 @@ public class BankingService implements AccountFormatter {
         return accountRepository.findByOwner(ownerName);
     }
 
-    public void seedAccount(String ownerName, com.bank.model.AccountType accountType, BigDecimal openingBalance) {
+    public void seedAccount(String ownerName, AccountType accountType, BigDecimal openingBalance) {
         if (!findByOwner(ownerName).isPresent()) {
             CreateAccountRequest request = new CreateAccountRequest();
             request.setOwnerName(ownerName);

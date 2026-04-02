@@ -1,6 +1,9 @@
 package com.bank.dto;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -17,8 +20,8 @@ public class BankSummaryResponse {
         this.totalAccounts = totalAccounts;
         this.totalBalance = totalBalance;
         this.averageBalance = averageBalance;
-        this.accountsByType = accountsByType;
-        this.premiumOwners = premiumOwners;
+        this.accountsByType = Collections.unmodifiableMap(new LinkedHashMap<>(accountsByType));
+        this.premiumOwners = Collections.unmodifiableList(new ArrayList<>(premiumOwners));
     }
 
     public long getTotalAccounts() {

@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 public class AmountRequest {
 
     @NotNull
-    @DecimalMin(value = "0.01", inclusive = true)
+    @DecimalMin("0.01")
     private BigDecimal amount;
 
     @NotBlank
@@ -18,15 +18,7 @@ public class AmountRequest {
         return amount;
     }
 
-    public void setAmount(BigDecimal amount) {
-        this.amount = amount;
-    }
-
     public String getDescription() {
         return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
     }
 }
