@@ -3,7 +3,6 @@ package com.bank.repository;
 import com.bank.model.Account;
 import org.springframework.stereotype.Repository;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,6 +26,6 @@ public class InMemoryAccountRepository implements AccountRepository {
 
     @Override
     public List<Account> findAll() {
-        return new ArrayList<>(accounts.values());
+        return List.copyOf(accounts.values());
     }
 }

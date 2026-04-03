@@ -1,7 +1,5 @@
 package com.bank.dto;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 public class PageResponse<T> {
@@ -15,7 +13,7 @@ public class PageResponse<T> {
     private final boolean last;
 
     public PageResponse(List<T> content, int page, int size, long totalElements, int totalPages, boolean first, boolean last) {
-        this.content = Collections.unmodifiableList(new ArrayList<>(content));
+        this.content = List.copyOf(content);
         this.page = page;
         this.size = size;
         this.totalElements = totalElements;

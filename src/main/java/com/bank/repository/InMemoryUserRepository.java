@@ -3,6 +3,7 @@ package com.bank.repository;
 import com.bank.model.BankUser;
 import org.springframework.stereotype.Repository;
 
+import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -14,12 +15,12 @@ public class InMemoryUserRepository implements UserRepository {
 
     @Override
     public BankUser save(BankUser user) {
-        usersByEmail.put(user.getEmail().toLowerCase(), user);
+        usersByEmail.put(user.getEmail().toLowerCase(Locale.ROOT), user);
         return user;
     }
 
     @Override
     public Optional<BankUser> findByEmail(String email) {
-        return Optional.ofNullable(usersByEmail.get(email.toLowerCase()));
+        return Optional.ofNullable(usersByEmail.get(email.toLowerCase(Locale.ROOT)));
     }
 }

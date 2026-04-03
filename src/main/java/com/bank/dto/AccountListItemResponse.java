@@ -5,9 +5,6 @@ import com.bank.model.AccountType;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -30,8 +27,8 @@ public class AccountListItemResponse {
         this.accountType = accountType;
         this.balance = balance;
         this.createdAt = createdAt;
-        this.tags = Collections.unmodifiableList(new ArrayList<>(tags));
-        this.metadata = Collections.unmodifiableMap(new LinkedHashMap<>(metadata));
+        this.tags = List.copyOf(tags);
+        this.metadata = Map.copyOf(metadata);
         this.transactionCount = transactionCount;
     }
 

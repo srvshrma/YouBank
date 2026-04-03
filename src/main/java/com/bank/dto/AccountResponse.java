@@ -5,9 +5,6 @@ import com.bank.model.AccountType;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -30,9 +27,9 @@ public class AccountResponse {
         this.accountType = accountType;
         this.balance = balance;
         this.createdAt = createdAt;
-        this.tags = Collections.unmodifiableList(new ArrayList<>(tags));
-        this.metadata = Collections.unmodifiableMap(new LinkedHashMap<>(metadata));
-        this.transactions = Collections.unmodifiableList(new ArrayList<>(transactions));
+        this.tags = List.copyOf(tags);
+        this.metadata = Map.copyOf(metadata);
+        this.transactions = List.copyOf(transactions);
     }
 
     public static AccountResponse from(Account account) {
@@ -44,7 +41,9 @@ public class AccountResponse {
                 account.getCreatedAt(),
                 account.getTags(),
                 account.getMetadata(),
-                account.getTransactions().stream().map(TransactionResponse::from).collect(Collectors.toList())
+                account.getTransactions().stream()
+                        .map(TransactionResponse::from)
+                        .collect(Collectors.toUnmodifiableList())
         );
     }
 

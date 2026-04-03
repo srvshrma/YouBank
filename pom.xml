@@ -12,9 +12,9 @@
     <artifactId>YouBank</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>You Bank</name>
-    <description>Java 8 Spring Boot banking app with explicit language feature demonstrations</description>
+    <description>Java 11 Spring Boot banking app with modernized language feature usage</description>
     <properties>
-        <java.version>1.8</java.version>
+        <java.version>11</java.version>
     </properties>
     <dependencies>
         <dependency>
@@ -40,8 +40,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <source>${java.version}</source>
-                    <target>${java.version}</target>
+                    <release>${java.version}</release>
                     <parameters>true</parameters>
                 </configuration>
             </plugin>

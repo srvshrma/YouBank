@@ -3,7 +3,6 @@ package com.bank.model;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,15 +51,15 @@ public class Account {
     }
 
     public List<Transaction> getTransactions() {
-        return Collections.unmodifiableList(transactions);
+        return List.copyOf(transactions);
     }
 
     public List<String> getTags() {
-        return Collections.unmodifiableList(tags);
+        return List.copyOf(tags);
     }
 
     public Map<String, String> getMetadata() {
-        return Collections.unmodifiableMap(metadata);
+        return Map.copyOf(metadata);
     }
 
     public void addFunds(BigDecimal amount, TransactionType type, String description, String counterpartyAccountId) {

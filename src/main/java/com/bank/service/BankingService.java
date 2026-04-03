@@ -20,14 +20,11 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.StringJoiner;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,10 +44,8 @@ public class BankingService implements AccountFormatter {
     }
 
     public AccountResponse createAccount(CreateAccountRequest request) {
-        Account account = new Account(request.getOwnerName().trim(), request.getAccountType(), ZERO_AMOUNT);
-        List<String> tags = new ArrayList<>();
-        tags.add("java8");
-        tags.add(request.getAccountType().name().toLowerCase());
+        var account = new Account(request.getOwnerName().strip(), request.getAccountType(), ZERO_AMOUNT);
+        var tags = List.of("java8", request.getAccountType().name().toLowerCase());
         tags.forEach(account::addTag);
         account.putMetadata("createdBy", "lambda-onboarding");
         account.putMetadata("auditKey", AccountRepository.auditKey(account.getId()));
@@ -60,7 +55,7 @@ public class BankingService implements AccountFormatter {
         }
 
         if (request.getAccountType() == AccountType.SAVINGS) {
-            BigDecimal bonus = savingsInterest.apply(request.getOpeningBalance()).setScale(2, RoundingMode.HALF_UP);
+            var bonus = savingsInterest.apply(request.getOpeningBalance()).setScale(2, RoundingMode.HALF_UP);
             if (bonus.compareTo(ZERO_AMOUNT) > 0) {
                 account.addFunds(bonus, TransactionType.INTEREST, "Java 8 lambda interest bonus", null);
             }
@@ -73,14 +68,14 @@ public class BankingService implements AccountFormatter {
         return accountRepository.findAll().stream()
                 .sorted(Comparator.comparing(Account::getOwnerName))
                 .map(AccountResponse::from)
-                .collect(Collectors.toList());
+                .collect(Collectors.toUnmodifiableList());
     }
 
     public PageResponse<AccountListItemResponse> getAccounts(int page, int size) {
-        List<AccountListItemResponse> content = accountRepository.findAll().stream()
+        var content = accountRepository.findAll().stream()
                 .sorted(Comparator.comparing(Account::getOwnerName))
                 .map(AccountListItemResponse::from)
-                .collect(Collectors.toList());
+                .collect(Collectors.toUnmodifiableList());
         return paginate(content, page, size);
     }
 
@@ -89,22 +84,22 @@ public class BankingService implements AccountFormatter {
     }
 
     public PageResponse<TransactionResponse> getTransactions(String accountId, int page, int size) {
-        Account account = getAccountEntity(accountId);
-        List<TransactionResponse> transactions = account.getTransactions().stream()
+        var account = getAccountEntity(accountId);
+        var transactions = account.getTransactions().stream()
                 .sorted(Comparator.comparing(com.bank.model.Transaction::getCreatedAt).reversed())
                 .map(TransactionResponse::from)
-                .collect(Collectors.toList());
+                .collect(Collectors.toUnmodifiableList());
         return paginate(transactions, page, size);
     }
 
     public synchronized AccountResponse deposit(String accountId, BigDecimal amount, String description) {
-        Account account = getAccountEntity(accountId);
+        var account = getAccountEntity(accountId);
         account.addFunds(amount, TransactionType.DEPOSIT, description, null);
         return AccountResponse.from(accountRepository.save(account));
     }
 
     public synchronized AccountResponse withdraw(String accountId, BigDecimal amount, String description) {
-        Account account = getAccountEntity(accountId);
+        var account = getAccountEntity(accountId);
         if (account.getBalance().compareTo(amount) < 0) {
             throw new InsufficientFundsException(accountId);
         }
@@ -116,8 +111,8 @@ public class BankingService implements AccountFormatter {
         if (request.getSourceAccountId().equals(request.getTargetAccountId())) {
             throw new IllegalArgumentException("Source and target accounts must be different");
         }
-        Account source = getAccountEntity(request.getSourceAccountId());
-        Account target = getAccountEntity(request.getTargetAccountId());
+        var source = getAccountEntity(request.getSourceAccountId());
+        var target = getAccountEntity(request.getTargetAccountId());
         if (source.getBalance().compareTo(request.getAmount()) < 0) {
             throw new InsufficientFundsException(source.getId());
         }
@@ -125,33 +120,33 @@ public class BankingService implements AccountFormatter {
         target.addFunds(request.getAmount(), TransactionType.TRANSFER_IN, request.getDescription(), source.getId());
         accountRepository.save(source);
         accountRepository.save(target);
-        return Arrays.asList(AccountResponse.from(source), AccountResponse.from(target));
+        return List.of(AccountResponse.from(source), AccountResponse.from(target));
     }
 
     public BankSummaryResponse getSummary() {
-        List<Account> accounts = accountRepository.findAll();
-        BigDecimal totalBalance = accounts.stream()
+        var accounts = accountRepository.findAll();
+        var totalBalance = accounts.stream()
                 .map(Account::getBalance)
                 .reduce(ZERO_AMOUNT, BigDecimal::add);
-        BigDecimal average = accounts.isEmpty()
+        var average = accounts.isEmpty()
                 ? ZERO_AMOUNT
                 : totalBalance.divide(BigDecimal.valueOf(accounts.size()), 2, RoundingMode.HALF_UP);
 
-        Map<String, Long> accountsByType = accounts.stream()
+        var accountsByType = accounts.stream()
                 .collect(Collectors.groupingBy(account -> account.getAccountType().name(), LinkedHashMap::new, Collectors.counting()));
 
-        List<String> premiumOwners = accounts.stream()
+        var premiumOwners = accounts.stream()
                 .filter(account -> account.getBalance().compareTo(PREMIUM_THRESHOLD) >= 0)
                 .map(this::formatSummary)
-                .collect(Collectors.toList());
+                .collect(Collectors.toUnmodifiableList());
 
         return new BankSummaryResponse(accounts.size(), totalBalance, average, accountsByType, premiumOwners);
     }
 
     public String describePortfolio() {
-        StringJoiner joiner = new StringJoiner(" | ", "Portfolio[", "]");
-        accountRepository.findAll().forEach(account -> joiner.add(formatSummary(account)));
-        return joiner.toString();
+        return accountRepository.findAll().stream()
+                .map(this::formatSummary)
+                .collect(Collectors.joining(" | ", "Portfolio[", "]"));
     }
 
     public Optional<Account> findByOwner(String ownerName) {
@@ -159,8 +154,8 @@ public class BankingService implements AccountFormatter {
     }
 
     public void seedAccount(String ownerName, AccountType accountType, BigDecimal openingBalance) {
-        if (!findByOwner(ownerName).isPresent()) {
-            CreateAccountRequest request = new CreateAccountRequest();
+        if (findByOwner(ownerName).isEmpty()) {
+            var request = new CreateAccountRequest();
             request.setOwnerName(ownerName);
             request.setAccountType(accountType);
             request.setOpeningBalance(openingBalance);
@@ -181,11 +176,11 @@ public class BankingService implements AccountFormatter {
             throw new IllegalArgumentException("Page index must not be negative");
         }
 
-        int totalElements = items.size();
-        int totalPages = totalElements == 0 ? 1 : (int) Math.ceil((double) totalElements / (double) size);
-        int fromIndex = Math.min(page * size, totalElements);
-        int toIndex = Math.min(fromIndex + size, totalElements);
-        List<T> content = items.subList(fromIndex, toIndex);
+        var totalElements = items.size();
+        var totalPages = totalElements == 0 ? 1 : (int) Math.ceil((double) totalElements / size);
+        var fromIndex = Math.min(page * size, totalElements);
+        var toIndex = Math.min(fromIndex + size, totalElements);
+        var content = items.subList(fromIndex, toIndex);
 
         return new PageResponse<>(
                 content,

@@ -8,6 +8,7 @@ import com.bank.model.BankUser;
 import com.bank.repository.UserRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -20,17 +21,17 @@ public class AuthService {
     }
 
     public AuthResponse signup(SignupRequest request) {
-        String email = request.getEmail().trim().toLowerCase();
+        var email = normalizeEmail(request.getEmail());
         if (userRepository.findByEmail(email).isPresent()) {
             throw new AuthenticationException("An account with this email already exists");
         }
-        BankUser user = new BankUser(request.getFullName().trim(), email, request.getPassword());
+        var user = new BankUser(request.getFullName().strip(), email, request.getPassword());
         userRepository.save(user);
         return toAuthResponse(user);
     }
 
     public AuthResponse login(LoginRequest request) {
-        BankUser user = userRepository.findByEmail(request.getEmail().trim().toLowerCase())
+        var user = userRepository.findByEmail(normalizeEmail(request.getEmail()))
                 .orElseThrow(() -> new AuthenticationException("Invalid email or password"));
         if (!user.getPassword().equals(request.getPassword())) {
             throw new AuthenticationException("Invalid email or password");
@@ -39,9 +40,14 @@ public class AuthService {
     }
 
     public void seedUser(String fullName, String email, String password) {
-        if (!userRepository.findByEmail(email).isPresent()) {
-            userRepository.save(new BankUser(fullName, email.toLowerCase(), password));
+        var normalizedEmail = normalizeEmail(email);
+        if (userRepository.findByEmail(normalizedEmail).isEmpty()) {
+            userRepository.save(new BankUser(fullName.strip(), normalizedEmail, password));
         }
+    }
+
+    private String normalizeEmail(String email) {
+        return email.strip().toLowerCase(Locale.ROOT);
     }
 
     private AuthResponse toAuthResponse(BankUser user) {

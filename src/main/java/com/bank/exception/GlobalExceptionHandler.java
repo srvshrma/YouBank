@@ -36,7 +36,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleValidation(MethodArgumentNotValidException exception) {
-        String message = exception.getBindingResult().getFieldErrors().stream()
+        var message = exception.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getField)
                 .distinct()
                 .collect(Collectors.joining(", "));
@@ -44,7 +44,7 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<ApiErrorResponse> build(HttpStatus status, String message) {
-        ApiErrorResponse payload = new ApiErrorResponse(
+        var payload = new ApiErrorResponse(
                 LocalDateTime.now(),
                 status.value(),
                 status.getReasonPhrase(),
